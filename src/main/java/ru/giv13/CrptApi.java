@@ -1,12 +1,15 @@
 package ru.giv13;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.Getter;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,7 +64,7 @@ public class CrptApi implements AutoCloseable {
 
     private String lkDocumentsCreate(LkDocumentsCreateBody body) {
         String path = "/lk/documents/create";
-        Map<String, String> uriParams = new HashMap<>(Map.of("pg", body.productGroup().toString()));
+        Map<String, String> uriParams = new HashMap<>(Map.of("pg", body.getProductGroup().toString()));
         return makeHttpRequest(path, RequestMethod.POST, uriParams, body, "value");
     }
 
@@ -88,13 +91,13 @@ public class CrptApi implements AutoCloseable {
                             token = authCert(authCertKey());
                             if (token == null) {
                                 authFailed = true;
-                                throw new Exception("Не удалось получить токен");
+                                throw new Exception("Failed to get token");
                             }
                         }
                     }
                 }
                 if (authFailed) {
-                    throw new Exception("Не удалось получить токен в другом потоке");
+                    throw new Exception("Failed to get token in another thread");
                 }
             }
 
@@ -131,50 +134,91 @@ public class CrptApi implements AutoCloseable {
                 }
             }
 
-            throw new Exception(response.body());
+            throw new Exception(response.statusCode() + " -> " + response.body());
         } catch (Exception e) {
-            //System.err.println(e.getMessage());
-            //TODO: logger
+            System.err.println(e.getMessage());
         }
         return null;
     }
 
-    private record LkDocumentsCreateBody(
-            DocumentFormat documentFormat,
-            ProductDocument productDocument,
-            ProductGroup productGroup,
-            String signature,
-            DocumentType type
-    ) {}
+    @Getter
+    private class LkDocumentsCreateBody {
+        private final DocumentFormat documentFormat;
+        private final String productDocument;
+        private final ProductGroup productGroup;
+        private final String signature;
+        private final DocumentType type;
 
-    public record ProductDocument(
-        String description,
-        String participantInn,
-        String doc_id,
-        String doc_status,
-        String doc_type,
-        String importRequest,
-        String owner_inn,
-        String participant_inn,
-        String producer_inn,
-        String production_date,
-        String production_type,
-        List<Product> products,
-        String reg_date,
-        String reg_number
-    ) {}
+        public LkDocumentsCreateBody(DocumentFormat documentFormat, ProductDocument productDocument, ProductGroup productGroup, String signature, DocumentType type) {
+            this.documentFormat = documentFormat;
+            String json = "";
+            try {
+                json = mapper.writer().writeValueAsString(productDocument);
+            } catch (JsonProcessingException ignored) {}
+            this.productDocument = Base64.getEncoder().encodeToString(json.getBytes());
+            this.productGroup = productGroup;
+            this.signature = signature;
+            this.type = type;
+        }
+    }
 
-    public record Product (
-        CertificateDocument certificate_document,
-        String certificate_document_date,
-        String certificate_document_number,
-        String owner_inn,
-        String producer_inn,
-        String production_date,
-        String tnved_code,
-        String uit_code,
-        String uitu_code
-    ) {}
+    @Getter
+    public static class ProductDocument {
+        private final Map<String, String> description;
+        private final String doc_id;
+        private final String doc_status;
+        private final String doc_type;
+        private final String importRequest;
+        private final String owner_inn;
+        private final String participant_inn;
+        private final String producer_inn;
+        private final String production_date;
+        private final String production_type;
+        private final List<Product> products;
+        private final String reg_date;
+        private final String reg_number;
+
+        public ProductDocument(String participantInn, String doc_id, String doc_status, String doc_type, boolean importRequest, String owner_inn, String participant_inn, String producer_inn, String production_date, String production_type, List<Product> products, String reg_date, String reg_number) {
+            this.description = new HashMap<>(Map.of("participantInn", participantInn));
+            this.doc_id = doc_id;
+            this.doc_status = doc_status;
+            this.doc_type = doc_type;
+            this.importRequest = String.valueOf(importRequest);
+            this.owner_inn = owner_inn;
+            this.participant_inn = participant_inn;
+            this.producer_inn = producer_inn;
+            this.production_date = production_date;
+            this.production_type = production_type;
+            this.products = products;
+            this.reg_date = reg_date;
+            this.reg_number = reg_number;
+        }
+    }
+
+    @Getter
+    public static class Product {
+        private final CertificateDocument certificate_document;
+        private final String certificate_document_date;
+        private final String certificate_document_number;
+        private final String owner_inn;
+        private final String producer_inn;
+        private final String production_date;
+        private final String tnved_code;
+        private final String uit_code;
+        private final String uitu_code;
+
+        public Product(CertificateDocument certificate_document, String certificate_document_date, String certificate_document_number, String owner_inn, String producer_inn, String production_date, String tnved_code, String uit_code, String uitu_code) {
+            this.certificate_document = certificate_document;
+            this.certificate_document_date = certificate_document_date;
+            this.certificate_document_number = certificate_document_number;
+            this.owner_inn = owner_inn;
+            this.producer_inn = producer_inn;
+            this.production_date = production_date;
+            this.tnved_code = tnved_code;
+            this.uit_code = uit_code;
+            this.uitu_code = uitu_code;
+        }
+    }
 
     private enum RequestMethod {
         GET,

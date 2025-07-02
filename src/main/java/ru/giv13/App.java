@@ -20,30 +20,29 @@ public class App
                         List<CrptApi.Product> products = new ArrayList<>();
                         products.add(new CrptApi.Product(
                                 CrptApi.CertificateDocument.CONFORMITY_CERTIFICATE,
-                                "2019-04-12",
+                                "2025-06-01",
                                 "1111111111",
                                 "1111111111",
                                 "1111111111",
-                                "2019-04-12",
-                                "6401000000",
-                                "11111111111111111111111111111111111111",
-                                "000000000000000000"
+                                "2025-06-01",
+                                "1111111111",
+                                "1111111111",
+                                "1111111111"
                         ));
                         CrptApi.ProductDocument productDocument = new CrptApi.ProductDocument(
-                                "",
-                                "",
-                                "",
-                                "",
-                                "",
-                                "",
-                                "",
-                                "",
-                                "",
-                                "",
-                                "",
+                                "1111111111",
+                                "1111111111",
+                                "success",
+                                "OWN_PRODUCTION",
+                                true,
+                                "1111111111",
+                                "1111111111",
+                                "1111111111",
+                                "2025-06-01",
+                                "OWN_PRODUCTION",
                                 products,
-                                "",
-                                ""
+                                "2025-06-01",
+                                "1111111111"
                         );
                         String productUUID = crptApi.lkDocumentsCreateLpIntroduceGoods(CrptApi.ProductGroup.milk, productDocument, "Some signature");
                         System.out.println("Thread " + Thread.currentThread().getName() + ": " + productUUID);
