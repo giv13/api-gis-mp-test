@@ -14,7 +14,7 @@ public class App
                 CrptApi crptApi = CrptApi.getInstance("https://ismp.crpt.ru/api/v3", TimeUnit.SECONDS, 10);
                 ExecutorService executor = Executors.newFixedThreadPool(5)
         ) {
-            for (int i = 0; i < 30; i++) {
+            for (int i = 0; i < 20; i++) {
                 executor.submit(() -> {
                     try {
                         List<CrptApi.Product> products = new ArrayList<>();

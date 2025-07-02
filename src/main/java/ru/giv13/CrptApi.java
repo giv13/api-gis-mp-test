@@ -24,7 +24,8 @@ public class CrptApi implements AutoCloseable {
     private final ScheduledExecutorService scheduler;
     private final ObjectMapper mapper;
 
-    private String token;
+    private volatile String token;
+    private volatile boolean authFailed = false;
 
     private CrptApi(String apiUrl, TimeUnit timeUnit, int requestLimit) {
         this.apiUrl = apiUrl;
@@ -80,10 +81,20 @@ public class CrptApi implements AutoCloseable {
         try {
             semaphore.acquire();
 
-            if (withToken && token == null) {
-                token = authCert(authCertKey());
-                if (token == null) {
-                    throw new Exception("Ошибка получения токена");
+            if (withToken) {
+                if (token == null && !authFailed) {
+                    synchronized (this) {
+                        if (token == null && !authFailed) {
+                            token = authCert(authCertKey());
+                            if (token == null) {
+                                authFailed = true;
+                                throw new Exception("Не удалось получить токен");
+                            }
+                        }
+                    }
+                }
+                if (authFailed) {
+                    throw new Exception("Не удалось получить токен в другом потоке");
                 }
             }
 
