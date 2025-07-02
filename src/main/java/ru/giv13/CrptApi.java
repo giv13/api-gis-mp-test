@@ -19,27 +19,45 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+/**
+ * Класс для API ГИС МТ
+ * <p>Имплементирует AutoCloseable для автоматической остановки периодического сброса
+ */
 public class CrptApi implements AutoCloseable {
+    // Потокобезопасный Singleton
     private static volatile CrptApi instance;
 
+    // Базовый адрес API
     private final String apiUrl;
+
+    // Потокобезопасное ограничение на количество запросов к API
     private final Semaphore semaphore;
     private final ScheduledExecutorService scheduler;
+
+    // Сериализация/десериализация объектов
     private final ObjectMapper mapper;
 
+    // Потокобезопасный Token
     private volatile String token;
     private volatile boolean authFailed = false;
 
+    /**
+     * Конструктор потокобезопасного Singleton
+     */
     private CrptApi(String apiUrl, TimeUnit timeUnit, int requestLimit) {
         this.apiUrl = apiUrl;
         this.semaphore = new Semaphore(requestLimit);
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
+        // Запуск периодического сброса ограничения на количество запросов к API
         scheduler.scheduleAtFixedRate(
                 () -> semaphore.release(requestLimit - semaphore.availablePermits()), 0, 1, timeUnit
         );
         this.mapper = new ObjectMapper();
     }
 
+    /**
+     * Экземпляр потокобезопасного Singleton
+     */
     public static CrptApi getInstance(String url, TimeUnit timeUnit, int requestLimit) {
         if (instance == null) {
             synchronized (CrptApi.class) {
@@ -51,27 +69,49 @@ public class CrptApi implements AutoCloseable {
         return instance;
     }
 
+    /**
+     * Остановка периодического сброса
+     * <p>Также обнуляю instance для предотвращения следующей ситуации:
+     * <ol>
+     *   <li>Создается объект класса CrptApi
+     *   <li>С объектом происходят какие-то манипуляции и в конце вызывается остановка периодического сброса
+     *   <li>Создается еще один объект класса CrptApi, но так как это Singleton, то по факту возвращается уже созданный экземпляр с остановленным периодическим сбросом
+     *   <li>Из-за этого не выполняются API-запросы, так как периодический сброс ограничения на количество запросов к API больше не вызывается
+     * </ol>
+     */
     @Override
     public void close() {
         scheduler.shutdown();
         instance = null;
     }
 
+    /**
+     * Создание документа для ввода в оборот товара, произведенного в РФ
+     */
     public String lkDocumentsCreateLpIntroduceGoods(ProductGroup productGroup, ProductDocument productDocument, String signature) {
         LkDocumentsCreateBody body = new LkDocumentsCreateBody(DocumentFormat.MANUAL, productDocument, productGroup, signature, DocumentType.LP_INTRODUCE_GOODS);
         return lkDocumentsCreate(body);
     }
 
+    /**
+     * Единый метод создания документов
+     */
     private String lkDocumentsCreate(LkDocumentsCreateBody body) {
         String path = "/lk/documents/create";
         Map<String, String> uriParams = new HashMap<>(Map.of("pg", body.getProductGroup().toString()));
         return makeHttpRequest(path, RequestMethod.POST, uriParams, body, "value");
     }
 
+    /**
+     * Запрос авторизаций
+     */
     private String authCertKey() {
         return makeHttpRequest("/auth/cert/key", RequestMethod.GET, new HashMap<>(), null, null, false);
     }
 
+    /**
+     * Получение аутентификационного токена
+     */
     private String authCert(String authCertKey) {
         return makeHttpRequest("/auth/cert/", RequestMethod.POST, new HashMap<>(), authCertKey, "token", false);
     }
@@ -80,10 +120,15 @@ public class CrptApi implements AutoCloseable {
         return makeHttpRequest(path, method, uriParams, body, responseKey, true);
     }
 
+    /**
+     * Общий метод для API-запросов
+     */
     private String makeHttpRequest(String path, RequestMethod method, Map<String, String> uriParams, Object body, String responseKey, boolean withToken) {
         try {
             semaphore.acquire();
 
+            // Потокобезопасное получение токена
+            // Если токен не задан, остальные потоки ожидают поток, в котором происходит получение токена
             if (withToken) {
                 if (token == null && !authFailed) {
                     synchronized (this) {
@@ -96,16 +141,19 @@ public class CrptApi implements AutoCloseable {
                         }
                     }
                 }
+                // Если получение токена завершилось с ошибкой, все запросы в остальных потоках также автоматически вернут ошибку
                 if (authFailed) {
                     throw new Exception("Failed to get token in another thread");
                 }
             }
 
             String uri = apiUrl + path;
+            // Добавляем URI-параметры к URI
             if (!uriParams.isEmpty()) {
                 uri += uriParams.entrySet().stream().map(param -> param.getKey() + "=" + param.getValue()).collect(Collectors.joining("&", "?", ""));
             }
 
+            // Формируем тело запроса
             HttpRequest.BodyPublisher publisher;
             if (body == null) {
                 publisher = HttpRequest.BodyPublishers.noBody();
@@ -114,8 +162,7 @@ public class CrptApi implements AutoCloseable {
                 publisher = HttpRequest.BodyPublishers.ofString(json);
             }
 
-            //noinspection resource
-            HttpClient client = HttpClient.newHttpClient();
+            // Формируем и отправляем HTTP-запрос
             HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri(URI.create(uri))
                     .header("Content-Type", "application/json")
@@ -123,8 +170,10 @@ public class CrptApi implements AutoCloseable {
             if (withToken) {
                 builder.header("Authorization", "Bearer " + token);
             }
+            // noinspection resource
+            HttpResponse<String> response = HttpClient.newHttpClient().send(builder.build(), HttpResponse.BodyHandlers.ofString());
 
-            HttpResponse<String> response = client.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+            // Если ответ успешный
             if (response.statusCode() == 200) {
                 if (responseKey == null) {
                     return response.body();
@@ -134,6 +183,7 @@ public class CrptApi implements AutoCloseable {
                 }
             }
 
+            // Если ответ неуспешный
             throw new Exception(response.statusCode() + " -> " + response.body());
         } catch (Exception e) {
             System.err.println(e.getMessage());
@@ -141,6 +191,9 @@ public class CrptApi implements AutoCloseable {
         return null;
     }
 
+    /**
+     * Тело запроса для единого метода создания документов
+     */
     @Getter
     private class LkDocumentsCreateBody {
         private final DocumentFormat documentFormat;
@@ -151,6 +204,7 @@ public class CrptApi implements AutoCloseable {
 
         public LkDocumentsCreateBody(DocumentFormat documentFormat, ProductDocument productDocument, ProductGroup productGroup, String signature, DocumentType type) {
             this.documentFormat = documentFormat;
+            // Согласно документации, содержимое документа должно быть Base64(JSON.stringify)
             String json = "";
             try {
                 json = mapper.writer().writeValueAsString(productDocument);
@@ -162,6 +216,9 @@ public class CrptApi implements AutoCloseable {
         }
     }
 
+    /**
+     * Документ
+     */
     @Getter
     public static class ProductDocument {
         private final Map<String, String> description;
@@ -195,6 +252,9 @@ public class CrptApi implements AutoCloseable {
         }
     }
 
+    /**
+     * Товар
+     */
     @Getter
     public static class Product {
         private final CertificateDocument certificate_document;
@@ -220,16 +280,25 @@ public class CrptApi implements AutoCloseable {
         }
     }
 
+    /**
+     * Метод запроса
+     */
     private enum RequestMethod {
         GET,
         POST,
     }
 
+    /**
+     * Код вида документа обязательной сертификации
+     */
     public enum CertificateDocument {
         CONFORMITY_CERTIFICATE,
         CONFORMITY_DECLARATIO,
     }
 
+    /**
+     * Товарная группа
+     */
     public enum ProductGroup {
         clothes,
         shoes,
@@ -243,12 +312,18 @@ public class CrptApi implements AutoCloseable {
         wheelchairs,
     }
 
+    /**
+     * Формат документа
+     */
     private enum DocumentFormat {
         MANUAL,
         XML,
         CSV,
     }
 
+    /**
+     * Тип документа
+     */
     private enum DocumentType {
         AGGREGATION_DOCUMENT,
         AGGREGATION_DOCUMENT_CSV,
