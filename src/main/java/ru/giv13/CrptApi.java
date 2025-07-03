@@ -32,26 +32,21 @@ public class CrptApi implements AutoCloseable {
 
     // Потокобезопасное ограничение на количество запросов к API
     private final Semaphore semaphore;
-    private final ScheduledExecutorService scheduler;
+    private ScheduledExecutorService scheduler;
 
     // Сериализация/десериализация объектов
     private final ObjectMapper mapper;
 
     // Потокобезопасный Token
     private volatile String token;
-    private volatile boolean authFailed = false;
+    private volatile boolean authFailed;
 
     /**
      * Конструктор потокобезопасного Singleton
      */
-    private CrptApi(String apiUrl, TimeUnit timeUnit, int requestLimit) {
+    private CrptApi(String apiUrl, int requestLimit) {
         this.apiUrl = apiUrl;
         this.semaphore = new Semaphore(requestLimit);
-        this.scheduler = Executors.newSingleThreadScheduledExecutor();
-        // Запуск периодического сброса ограничения на количество запросов к API
-        scheduler.scheduleAtFixedRate(
-                () -> semaphore.release(requestLimit - semaphore.availablePermits()), 0, 1, timeUnit
-        );
         this.mapper = new ObjectMapper();
     }
 
@@ -62,27 +57,25 @@ public class CrptApi implements AutoCloseable {
         if (instance == null) {
             synchronized (CrptApi.class) {
                 if (instance == null) {
-                    instance = new CrptApi(url, timeUnit, requestLimit);
+                    instance = new CrptApi(url, requestLimit);
                 }
             }
         }
+        // При каждом вызове метода обновляем authFailed и запускаем периодический сброс ограничения на количество запросов к API
+        instance.authFailed = false;
+        instance.scheduler = Executors.newSingleThreadScheduledExecutor();
+        instance.scheduler.scheduleAtFixedRate(
+                () -> instance.semaphore.release(requestLimit - instance.semaphore.availablePermits()), 0, 1, timeUnit
+        );
         return instance;
     }
 
     /**
      * Остановка периодического сброса
-     * <p>Также обнуляю instance для предотвращения следующей ситуации:
-     * <ol>
-     *   <li>Создается объект класса CrptApi
-     *   <li>С объектом происходят какие-то манипуляции и в конце вызывается остановка периодического сброса
-     *   <li>Создается еще один объект класса CrptApi, но так как это Singleton, то по факту возвращается уже созданный экземпляр с остановленным периодическим сбросом
-     *   <li>Из-за этого не выполняются API-запросы, так как периодический сброс ограничения на количество запросов к API больше не вызывается
-     * </ol>
      */
     @Override
     public void close() {
         scheduler.shutdown();
-        instance = null;
     }
 
     /**
