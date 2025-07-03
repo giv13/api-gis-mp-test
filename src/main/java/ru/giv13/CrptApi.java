@@ -39,7 +39,7 @@ public class CrptApi implements AutoCloseable {
 
     // Потокобезопасный Token
     private volatile String token;
-    private static final int tokenLifetime = 10 * 60 * 60 * 1000; // 10 часов в миллисекундах
+    private static final int tokenLifetime = 10 * 60 * 60 * 1000; // 10 часов (согласно документации) в миллисекундах
     private volatile long tokenExpiresAt;
     private volatile boolean authFailed;
 
@@ -56,6 +56,9 @@ public class CrptApi implements AutoCloseable {
      * Экземпляр потокобезопасного Singleton
      */
     public static CrptApi getInstance(String url, TimeUnit timeUnit, int requestLimit) {
+        if (requestLimit <= 0) {
+            throw new IllegalArgumentException("Request limit must be positive");
+        }
         if (instance == null) {
             synchronized (CrptApi.class) {
                 if (instance == null) {

@@ -49,6 +49,8 @@ public class App
                     } catch (Exception ignored) {}
                 });
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            System.err.println(e.getMessage());
+        }
     }
 }
