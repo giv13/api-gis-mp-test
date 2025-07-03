@@ -39,6 +39,8 @@ public class CrptApi implements AutoCloseable {
 
     // Потокобезопасный Token
     private volatile String token;
+    private static final int tokenLifetime = 10 * 60 * 60 * 1000; // 10 часов в миллисекундах
+    private volatile long tokenExpiresAt;
     private volatile boolean authFailed;
 
     /**
@@ -123,13 +125,15 @@ public class CrptApi implements AutoCloseable {
             // Потокобезопасное получение токена
             // Если токен не задан, остальные потоки ожидают поток, в котором происходит получение токена
             if (withToken) {
-                if (token == null && !authFailed) {
+                if ((token == null || System.currentTimeMillis() > tokenExpiresAt) && !authFailed) {
                     synchronized (this) {
-                        if (token == null && !authFailed) {
+                        if ((token == null || System.currentTimeMillis() > tokenExpiresAt) && !authFailed) {
                             token = authCert(authCertKey());
                             if (token == null) {
                                 authFailed = true;
                                 throw new Exception("Failed to get token");
+                            } else {
+                                tokenExpiresAt = System.currentTimeMillis() + tokenLifetime;
                             }
                         }
                     }
