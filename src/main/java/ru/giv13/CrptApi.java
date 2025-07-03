@@ -1,5 +1,6 @@
 package ru.giv13;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -96,7 +97,7 @@ public class CrptApi implements AutoCloseable {
      */
     private String lkDocumentsCreate(LkDocumentsCreateBody body) {
         String path = "/lk/documents/create";
-        Map<String, String> uriParams = new HashMap<>(Map.of("pg", body.getProductGroup().toString()));
+        Map<String, String> uriParams = new HashMap<>(Map.of("pg", body.getProductGroup()));
         return makeHttpRequest(path, RequestMethod.POST, uriParams, body, "value");
     }
 
@@ -158,7 +159,7 @@ public class CrptApi implements AutoCloseable {
             if (body == null) {
                 publisher = HttpRequest.BodyPublishers.noBody();
             } else {
-                String json = body instanceof String ? (String) body : mapper.writer().writeValueAsString(body);
+                String json = body instanceof String ? (String) body : mapper.writeValueAsString(body);
                 publisher = HttpRequest.BodyPublishers.ofString(json);
             }
 
@@ -196,23 +197,26 @@ public class CrptApi implements AutoCloseable {
      */
     @Getter
     private class LkDocumentsCreateBody {
-        private final DocumentFormat documentFormat;
+        @JsonProperty("document_format")
+        private final String documentFormat;
+        @JsonProperty("product_document")
         private final String productDocument;
-        private final ProductGroup productGroup;
+        @JsonProperty("product_group")
+        private final String productGroup;
         private final String signature;
-        private final DocumentType type;
+        private final String type;
 
         public LkDocumentsCreateBody(DocumentFormat documentFormat, ProductDocument productDocument, ProductGroup productGroup, String signature, DocumentType type) {
-            this.documentFormat = documentFormat;
+            this.documentFormat = documentFormat.toString();
             // Согласно документации, содержимое документа должно быть Base64(JSON.stringify)
             String json = "";
             try {
-                json = mapper.writer().writeValueAsString(productDocument);
+                json = mapper.writeValueAsString(productDocument);
             } catch (JsonProcessingException ignored) {}
             this.productDocument = Base64.getEncoder().encodeToString(json.getBytes());
-            this.productGroup = productGroup;
+            this.productGroup = productGroup.toString();
             this.signature = signature;
-            this.type = type;
+            this.type = type.toString();
         }
     }
 
@@ -222,33 +226,43 @@ public class CrptApi implements AutoCloseable {
     @Getter
     public static class ProductDocument {
         private final Map<String, String> description;
-        private final String doc_id;
-        private final String doc_status;
-        private final String doc_type;
+        @JsonProperty("doc_id")
+        private final String docId;
+        @JsonProperty("doc_status")
+        private final String docStatus;
+        @JsonProperty("doc_type")
+        private final String docType;
         private final String importRequest;
-        private final String owner_inn;
-        private final String participant_inn;
-        private final String producer_inn;
-        private final String production_date;
-        private final String production_type;
+        @JsonProperty("owner_inn")
+        private final String ownerInn;
+        @JsonProperty("participant_inn")
+        private final String participantInn;
+        @JsonProperty("producer_inn")
+        private final String producerInn;
+        @JsonProperty("production_date")
+        private final String productionDate;
+        @JsonProperty("production_type")
+        private final String productionType;
         private final List<Product> products;
-        private final String reg_date;
-        private final String reg_number;
+        @JsonProperty("reg_date")
+        private final String regDate;
+        @JsonProperty("reg_number")
+        private final String regNumber;
 
-        public ProductDocument(String participantInn, String doc_id, String doc_status, String doc_type, boolean importRequest, String owner_inn, String participant_inn, String producer_inn, String production_date, String production_type, List<Product> products, String reg_date, String reg_number) {
+        public ProductDocument(String docId, String docStatus, String docType, boolean importRequest, String ownerInn, String participantInn, String producerInn, String productionDate, String productionType, List<Product> products, String regDate, String regNumber) {
             this.description = new HashMap<>(Map.of("participantInn", participantInn));
-            this.doc_id = doc_id;
-            this.doc_status = doc_status;
-            this.doc_type = doc_type;
+            this.docId = docId;
+            this.docStatus = docStatus;
+            this.docType = docType;
             this.importRequest = String.valueOf(importRequest);
-            this.owner_inn = owner_inn;
-            this.participant_inn = participant_inn;
-            this.producer_inn = producer_inn;
-            this.production_date = production_date;
-            this.production_type = production_type;
+            this.ownerInn = ownerInn;
+            this.participantInn = participantInn;
+            this.producerInn = producerInn;
+            this.productionDate = productionDate;
+            this.productionType = productionType;
             this.products = products;
-            this.reg_date = reg_date;
-            this.reg_number = reg_number;
+            this.regDate = regDate;
+            this.regNumber = regNumber;
         }
     }
 
@@ -257,26 +271,35 @@ public class CrptApi implements AutoCloseable {
      */
     @Getter
     public static class Product {
-        private final CertificateDocument certificate_document;
-        private final String certificate_document_date;
-        private final String certificate_document_number;
-        private final String owner_inn;
-        private final String producer_inn;
-        private final String production_date;
-        private final String tnved_code;
-        private final String uit_code;
-        private final String uitu_code;
+        @JsonProperty("certificate_document")
+        private final CertificateDocument certificateDocument;
+        @JsonProperty("certificate_document_date")
+        private final String certificateDocumentDate;
+        @JsonProperty("certificate_document_number")
+        private final String certificateDocumentNumber;
+        @JsonProperty("owner_inn")
+        private final String ownerInn;
+        @JsonProperty("producer_inn")
+        private final String producerInn;
+        @JsonProperty("production_date")
+        private final String productionDate;
+        @JsonProperty("tnved_code")
+        private final String tnvedCode;
+        @JsonProperty("uit_code")
+        private final String uitCode;
+        @JsonProperty("uitu_code")
+        private final String uituCode;
 
-        public Product(CertificateDocument certificate_document, String certificate_document_date, String certificate_document_number, String owner_inn, String producer_inn, String production_date, String tnved_code, String uit_code, String uitu_code) {
-            this.certificate_document = certificate_document;
-            this.certificate_document_date = certificate_document_date;
-            this.certificate_document_number = certificate_document_number;
-            this.owner_inn = owner_inn;
-            this.producer_inn = producer_inn;
-            this.production_date = production_date;
-            this.tnved_code = tnved_code;
-            this.uit_code = uit_code;
-            this.uitu_code = uitu_code;
+        public Product(CertificateDocument certificateDocument, String certificateDocumentDate, String certificateDocumentNumber, String ownerInn, String producerInn, String productionDate, String tnvedCode, String uitCode, String uituCode) {
+            this.certificateDocument = certificateDocument;
+            this.certificateDocumentDate = certificateDocumentDate;
+            this.certificateDocumentNumber = certificateDocumentNumber;
+            this.ownerInn = ownerInn;
+            this.producerInn = producerInn;
+            this.productionDate = productionDate;
+            this.tnvedCode = tnvedCode;
+            this.uitCode = uitCode;
+            this.uituCode = uituCode;
         }
     }
 

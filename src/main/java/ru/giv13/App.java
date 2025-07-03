@@ -31,7 +31,6 @@ public class App
                         ));
                         CrptApi.ProductDocument productDocument = new CrptApi.ProductDocument(
                                 "1111111111",
-                                "1111111111",
                                 "success",
                                 "OWN_PRODUCTION",
                                 true,
